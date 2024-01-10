@@ -1,0 +1,11 @@
+Template: ubiquity/text/nvpmodel_label
+Type: text
+Description: Select Nvpmodel Mode
+
+Template: nvpmodel/modes
+Type: select
+Choices: ${MODE_NAMES}
+Description: Select from one of the below nvpmodel modes:
+ If you are unsure which mode to select, keep the default setting.
+ This setting can be changed at runtime using the nvpmodel GUI or nvpmodel command line utility.
+ Refer to NVIDIA Jetson Linux Developer Guide for further information.

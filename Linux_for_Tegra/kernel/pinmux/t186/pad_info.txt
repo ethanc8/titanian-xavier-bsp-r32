@@ -1,0 +1,9 @@
+ufs,1,1
+dbg,1,4
+spi,1,5
+ao_hv,2,0
+audio_hv,2,1
+dmic_hv,2,2
+sdmmc1_hv,2,4
+sdmmc2_hv,2,5
+sdmmc3_hv,2,6

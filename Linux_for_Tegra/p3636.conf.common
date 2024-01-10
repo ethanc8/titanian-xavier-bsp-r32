@@ -1,0 +1,173 @@
+# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+sub_var_token()
+{
+	local var="$1";
+	local from="$2";
+	local to="$3";
+	if [ "${var}" != "" -a "${!var}" != "" ]; then
+		if [[ "${!var}" =~ "${from}" ]]; then
+			local val=`echo "${!var}" | sed -e s/${from}/${to}/`;
+			eval "${var}=${val}";
+		fi;
+	fi;
+}
+
+# Process_board_version:
+# Trigger to read the board id and board version from EEPROM on main board.
+# undef for non eeprom boards.
+process_board_version()
+{
+	local board_id="${1}";
+	local board_version="${2}";
+	local board_sku="${3}";
+	local board_revision="${4}";
+	local chiprev="${5}";
+
+	echo "Board ID(${board_id}) version(${board_version}) sku(${board_sku}) revision(${board_revision})"
+
+	if [ "${USE_UBOOT}" -eq 1 ]; then
+		DFLT_KERNEL_IMAGE="bootloader/t186ref/p3636-0001/u-boot.bin";
+	fi;
+}
+
+# Process fuse version:
+#
+# Production Fused BD vs non-fused BD::::::
+#
+# preboot_d15_dev_cr.bin vs. preboot_d15_prod_cr.bin
+# mce_mts_d15_dev_cr.bin vs. mce_mts_d15_prod_cr.bin
+# mb1_dev.bin            vs. mb1_prod.bin
+# mb1_recovery_dev.bin   vs. mb1_recovery_prod.bin
+#
+process_fuse_level()
+{
+	local fuselevel="${1}";
+	local srctoken="_dev";
+	local trgtoken="_prod";
+
+	# fuselevel:
+	#	"fuselevel_unknown"
+	#	"fuselevel_nofuse"
+	#	"fuselevel_production"
+	#
+	if [ "${fuselevel}" = "fuselevel_unknown" ]; then
+		return;
+	fi;
+	if [ "${fuselevel}" = "fuselevel_nofuse" ]; then
+		srctoken="_prod";
+		trgtoken="_dev";
+		sub_var_token "WB0BOOT" "warmboot.bin" "warmboot_dev.bin";
+	else
+		sub_var_token "WB0BOOT" "warmboot_dev.bin" "warmboot.bin";
+	fi;
+	sub_var_token "MTSPREBOOT" "${srctoken}" "${trgtoken}";
+	sub_var_token "MTS"        "${srctoken}" "${trgtoken}";
+	sub_var_token "MB1FILE"    "${srctoken}" "${trgtoken}";
+	sub_var_token "SOSFILE"    "${srctoken}" "${trgtoken}";
+}
+
+# Common values and/or defaults across p2771-0000*.conf:
+
+ODMDATA=0x2090000;
+CHIPID=0x18;
+EMMC_CFG=flash_l4t_t186.xml;
+BOOTPARTSIZE=8388608;
+EMMCSIZE=15766388736;
+ITS_FILE=;
+BPFDTB_FILE=tegra186-bpmp-p3636-0001-a00-00.dtb;
+EMMC_BCT=tegra186-mb1-bct-memcfg-p3636-0001-a01.cfg;
+DTB_FILE=tegra186-p3636-0001-p3509-0000-a01.dtb;
+TBCDTB_FILE=tegra186-p3636-0001-p3509-0000-a01.dtb;
+# To configure whether to use U-Boot,
+# do either of the following before running flash.sh:
+# 1) Set environment variable USE_UBOOT to 0 or 1.
+# 2) Edit the line below to set USE_UBOOT to 0 or 1.
+if [ -z "${USE_UBOOT}" ]; then
+	USE_UBOOT=1;
+fi;
+ROOTFSSIZE=14GiB;
+CMDLINE_ADD="console=ttyS0,115200n8 console=tty0 fbcon=map:0 net.ifnames=0 isolcpus=1-2";
+target_board="t186ref";
+ROOT_DEV="mmcblk0p12 ------------ internal eMMC.
+        sda1 ----------------- external USB devices. (USB memory stick, HDD)
+        eth0 ----------------- nfsroot via RJ45 Ethernet port.
+        eth1 ----------------- nfsroot via USB Ethernet interface.";
+TEGRABOOT="bootloader/t186ref/nvtboot.bin";
+WB0BOOT="bootloader/t186ref/warmboot.bin";
+FLASHER="bootloader/nvtboot_recovery_cpu.bin";
+BOOTLOADER="bootloader/nvtboot_cpu.bin";
+INITRD="bootloader/l4t_initrd.img";
+TBCFILE="bootloader/cboot.bin";
+BPFFILE="bootloader/bpmp.bin";
+TOSFILE="bootloader/tos.img";
+EKSFILE="bootloader/eks.img";
+MTSPREBOOT="bootloader/preboot_d15_prod_cr.bin";
+MTS="bootloader/mce_mts_d15_prod_cr.bin";
+MB1FILE="bootloader/mb1_prod.bin";
+SOSFILE="bootloader/mb1_recovery_prod.bin";
+MB2BLFILE="bootloader/nvtboot_recovery.bin";
+
+# BCT args:
+#
+BCT="--sdram_config";
+BINSARGS="--bins \"";
+DEV_PARAMS="emmc.cfg";
+SCR_CONFIG="minimal_scr.cfg";
+SCR_COLD_BOOT_CONFIG="mobile_scr.cfg";
+MISC_CONFIG="tegra186-mb1-bct-misc-si-l4t.cfg";
+PINMUX_CONFIG="tegra186-mb1-bct-pinmux-p3636-0001-a00.cfg";
+PMC_CONFIG="tegra186-mb1-bct-pad-p3636-0001-a00.cfg";
+PMIC_CONFIG="tegra186-mb1-bct-pmic-p3636-0001-a00.cfg";
+PROD_CONFIG="tegra186-mb1-bct-prod-p3636-0001-a00.cfg";
+BOOTROM_CONFIG="tegra186-mb1-bct-bootrom-p3636-0001-a00.cfg";
+
+DEFAULT_FAB="A00";
+
+VERFILENAME="emmc_bootblob_ver.txt";
+SMDFILE="slot_metadata.bin";
+
+rootfs_ab=0;
+disk_enc_enable=0;
+# Rootfs A/B:
+if [[ "${ROOTFS_AB}" == 1 && "${ROOTFS_ENC}" == "" ]]; then
+	rootfs_ab=1;
+	EMMC_CFG=flash_l4t_t186_rootfs_ab.xml;
+	ROOTFSSIZE=7GiB;
+	SMDFILE="slot_metadata.bin.rootfsAB";
+# Disk encryption support:
+elif [[ "${ROOTFS_AB}" == "" && "${ROOTFS_ENC}" == 1 ]]; then
+	disk_enc_enable=1;
+	EMMC_CFG=flash_l4t_t186_enc_rfs.xml;
+# Rootfs A/B + Disk encryption support:
+elif [[ "${ROOTFS_AB}" == 1 && "${ROOTFS_ENC}" == 1 ]]; then
+	rootfs_ab=1;
+	disk_enc_enable=1;
+	EMMC_CFG=flash_l4t_t186_enc_rootfs_ab.xml;
+	ROOTFSSIZE=7GiB;
+	SMDFILE="slot_metadata.bin.rootfsAB";
+fi;

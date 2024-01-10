@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+nvpmodel_script="/usr/lib/nvidia/nvpmodel/nvpmodel.sh"
+nvpmodel_conf="/etc/nvpmodel.conf"
+
+default_mode=""
+default_mode_id=""
+modes=""
+
+if [ -L "${nvpmodel_conf}" ]; then
+	nvpmodel_conf="$(readlink -f "${nvpmodel_conf}")"
+fi
+
+if [ -f "${nvpmodel_conf}" ]; then
+	mnames=$(grep "^< POWER_MODEL ID=" "${nvpmodel_conf}" | awk -F"=" '{print $3}' | awk '{print $1}')
+	default_mode_id=$(grep "^< PM_CONFIG DEFAULT=" "${nvpmodel_conf}" | awk -F"=" '{print $2}' | awk '{print $1}')
+
+	modes=$(echo "${mnames}" | tr ";" "\n")
+	md_names=""
+	m_id=0
+
+	for mn in $modes
+	do
+		md_names="${md_names}${md_names:+, }${mn}"
+		if [ "${m_id}" == "${default_mode_id}" ]; then
+			default_mode="${mn}"
+		fi
+		m_id=$((m_id + 1))
+	done
+fi
+
+db_subst nvpmodel/modes MODE_NAMES "${md_names}"
+db_set nvpmodel/modes "${default_mode}"
+
+db_input high nvpmodel/modes || true
+db_go || true
+
+db_get nvpmodel/modes
+mname="${RET}"
+
+m_id=0
+for mn in $modes
+do
+	if [ "${mname}" == "${mn}" ]; then
+		break
+	fi
+	m_id=$((m_id + 1))
+done
+
+"${nvpmodel_script}" "${default_mode_id}" "${m_id}"

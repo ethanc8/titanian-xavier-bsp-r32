@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2017-2020, NVIDIA CORPORATION.  All rights reserved.
+#
+
+[Unit]
+Description=nv_update_verifier service
+; Everything depends on the NVIDIA per-boot script
+After=nv.service
+After=nvgetty.service
+After=l4t-rootfs-validation-config.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/nv_update_engine --verify
+
+[Install]
+WantedBy=multi-user.target
